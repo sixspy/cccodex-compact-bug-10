@@ -14,6 +14,29 @@ def list_jobs(db_path: str | None = None) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def _assert_detach_aligned(conn, plan) -> None:
+    """退挂项与碎件态必须对齐；偏了就挡合并任务。"""
+    drift_loose = conn.execute(
+        "SELECT f.id FROM lake_files f "
+        "WHERE f.table_name=? AND f.status='已入计划' "
+        "AND NOT EXISTS (SELECT 1 FROM plan_items i WHERE i.file_id=f.id)",
+        (plan["target_table"],),
+    ).fetchall()
+    if drift_loose:
+        raise ServiceError(
+            "退挂项与碎件态未对齐：存在已退挂未回写的碎件，禁止合并", 409
+        )
+    drift_mounted = conn.execute(
+        "SELECT f.id FROM plan_items i JOIN lake_files f ON f.id=i.file_id "
+        "WHERE i.plan_id=? AND f.status<>'已入计划'",
+        (plan["id"],),
+    ).fetchall()
+    if drift_mounted:
+        raise ServiceError(
+            "退挂项与碎件态未对齐：挂载碎件状态漂移，禁止合并", 409
+        )
+
+
 def start_rewrite(plan_id: int, db_path: str | None = None) -> dict:
     with get_db(db_path) as conn:
         plan = conn.execute(
@@ -29,9 +52,10 @@ def start_rewrite(plan_id: int, db_path: str | None = None) -> dict:
         ).fetchone()
         if running:
             raise ServiceError("已有在途合并任务", 409)
+        _assert_detach_aligned(conn, plan)
         items = conn.execute(
             "SELECT f.* FROM plan_items i JOIN lake_files f ON f.id=i.file_id "
-            "WHERE i.plan_id=? AND f.status IN ('已入计划','碎文件')",
+            "WHERE i.plan_id=? AND f.status='已入计划'",
             (plan_id,),
         ).fetchall()
         if not items:

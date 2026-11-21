@@ -21,7 +21,7 @@ export async function renderPlans(view, setMsg) {
         <div class="row">
           <button data-attach="${p.id}" type="button">挂入碎文件</button>
           <button data-pub="${p.id}" class="primary" type="button">发布</button>
-          <button data-detail="${p.id}" type="button">详情</button><span class="tag" data-thick="detach_hang">退挂已回写</span><span class="tag">退挂已回写</span>
+          <button data-detail="${p.id}" type="button">详情</button>
         </div>
         <pre class="muted" id="d${p.id}"></pre>
       </article>`).join('') || '<p class="muted">暂无计划</p>'}
@@ -59,7 +59,23 @@ export async function renderPlans(view, setMsg) {
     btn.onclick = async () => {
       try {
         const r = await api('/api/plans/' + btn.dataset.detail);
-        document.getElementById('d' + btn.dataset.detail).textContent = JSON.stringify(r.items, null, 2);
+        const pre = document.getElementById('d' + btn.dataset.detail);
+        pre.innerHTML = (r.items || []).map(f =>
+          `<div>${f.path} · ${f.size_bytes} 字节 · ${f.status} ` +
+          `<button data-detach="${btn.dataset.detail}:${f.id}" type="button">退挂</button></div>`
+        ).join('') || '无挂载碎件';
+        pre.querySelectorAll('[data-detach]').forEach(db => {
+          db.onclick = async () => {
+            try {
+              const [pid, fid] = db.dataset.detach.split(':');
+              await api('/api/plans/' + pid + '/detach', {
+                method:'POST', body: JSON.stringify({ file_id: Number(fid) }),
+              });
+              setMsg('已退挂并回写碎文件态');
+              await renderPlans(view, setMsg);
+            } catch (e) { setMsg(e.message, true); }
+          };
+        });
       } catch (e) { setMsg(e.message, true); }
     };
   });

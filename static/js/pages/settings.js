@@ -30,12 +30,12 @@ export async function renderSettings(view, setMsg) {
   try {
     const dash = await api('/api/detach_hang/dash');
     view.innerHTML += `<section class="card" style="margin-top:1rem">
-      <h3>退挂悬挂旁路</h3>
+      <h3>退挂对齐看板</h3>
       <span class="tag">${dash.chip}</span>
       <p class="muted">真相 ${dash.truth} · 假绿 ${dash.fake_green}</p>
       <div class="row">
         <button id="note_detach_hang" type="button">记一笔</button>
-        <button id="half_detach_hang" type="button">半修对齐</button>
+        <button id="half_detach_hang" type="button">对齐回写</button>
       </div>
     </section>`;
     document.getElementById('note_detach_hang').onclick = async () => {
@@ -48,7 +48,7 @@ export async function renderSettings(view, setMsg) {
     document.getElementById('half_detach_hang').onclick = async () => {
       try {
         const r = await api('/api/detach_hang/half', { method:'POST', body:'{}' });
-        setMsg('半修 ' + r.panel_chip + ' / ' + r.truth);
+        setMsg('对齐 ' + r.truth + ' · 回写 ' + (r.repaired || 0) + ' 项');
         await renderSettings(view, setMsg);
       } catch (e) { setMsg(e.message, true); }
     };
